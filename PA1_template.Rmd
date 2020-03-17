@@ -177,12 +177,13 @@ weekend <- filter(amd_new, daytype == "weekend")
 
 weekday_time_group <- na.exclude(group_by(weekday, interval))
 weekday_time_group <- summarize(weekday_time_group, Average.Steps = mean(steps))
-weekday_plot <- ggplot(weekday_time_group, aes(interval,Average.Steps))+geom_line(col="blue")+labs(title = "Average Daily Activity Summary", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
+weekday_plot <- ggplot(weekday_time_group, aes(interval,Average.Steps))+geom_line(col="blue")+ylim(0,250)+labs(title = "Activity Summary - Weekdays", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
 
 weekend_time_group <- na.exclude(group_by(weekend, interval))
 weekend_time_group <- summarize(weekend_time_group, Average.Steps = mean(steps))
-weekend_plot <- ggplot(weekend_time_group, aes(interval,Average.Steps))+geom_line(col="orange")+labs(title = "Average Daily Activity Summary", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
+weekend_plot <- ggplot(weekend_time_group, aes(interval,Average.Steps))+geom_line(col="orange")+ylim(0,250)+labs(title = "Activity Summary - Weekends", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
 
 ggarrange(weekday_plot, weekend_plot, 
-          labels = c("Weekdays", "Weekends"),
-          ncol = 2, nrow = 1)
+                 ncol = 1, nrow = 2)
+```
+
