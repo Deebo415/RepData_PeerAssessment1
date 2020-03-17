@@ -28,11 +28,11 @@ library(lubridate)
 library(data.table)
 library(dplyr)
 library(ggplot2)
+library(ggpubr)
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "activitydata.zip")
 unzip("activitydata.zip")
 amd <- read.csv("activity.csv", stringsAsFactors = FALSE)
 ```
-
 * Process/transform the data (if necessary) into a format suitable for your analysis
   + First, change the "date" column contents into a workable date format using lubridate:
 
@@ -51,7 +51,7 @@ amd_grouped <- na.exclude(group_by(amd, date))
   + So, if we summarize our grouped data and ask for another column to be generated that shows the sum of steps taken each day, that should give the answer:
 
 ```{r sum_steps, echo = TRUE}
-summarize(amd_grouped, Total.Steps = sum(steps))
+amd_grouped <- summarize(amd_grouped, Total.Steps = sum(steps))
 ```
   + ...sure enough, it does:
 ```{r sum_table, echo = FALSE}
@@ -79,34 +79,110 @@ print(median)
 * Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
   + So, we have to make another grouped representation of the data, grouped by time interval, then draw a plot based off of that, then add a vertical line and annotation to show the time interval at which the maximum average number of steps occurred.
 
-```r{draw_ave step_per_interval_plot}
-plot (x = amd_time_group$interval, y = amd_time_group$Average.Steps.Over.All.Days, type = "l", main = "Average Daily Activity Summary", xlab = "Daily Time Interval (5 Minute Intervals, Averaged Over All Days", ylab = "Average Number of Steps Taken Over All Days", col = "blue")
-maxsteps <- max(amd_time_group$Average.Steps.Over.All.Days)
-vertline <- as.numeric(amd_time_group[which.max(amd_time_group$Average.Steps.Over.All.Days),])
+```r{draw_ave step_per_interval_plot, echo = TRUE}
+amd_time_group <- na.exclude(group_by(amd, interval))
+amd_time_group <- summarize(amd_time_group, Average.Steps = mean(steps))
+names(amd_time_group) <- c("Time.Interval","Average.Steps")
+plot (x = amd_time_group$Time.Interval, y = amd_time_group$Average.Steps, type = "l", main = "Average Daily Activity Summary", xlab = "Daily Time Interval (5 Minute Intervals, Averaged Over All Days)", ylab = "Average Number of Steps", col = "blue")
+maxsteps <- max(amd_time_group$Average.Steps)
+vertline <- as.numeric(amd_time_group[which.max(amd_time_group$Average.Steps),])
+vertline <- vertline[[1]]
 abline(v = vertline, col = "red", lwd = 3)
-pointlabels <- c(round(amd_time_group$interval, 0))
-text(amd_time_group$interval, amd_time_group$Average.Steps.Over.All.Days, 
-     labels = pointlabels, pos = 3, offset = c(50,-10), cex = 0.65, 
-     col = "red")
-text(1100,175,"The maximum average steps (206.17) occurred\nduring the 5 minute interval between ", cex = 0.75)
-
-
+text(1600,175,"The maximum average steps (206.17) occurred\nduring the 5 minute interval between 0835 and 0840\n(8:35 - 8:40am)", cex = 0.55, col = "red")
+```
 ## Imputing missing values
 
-Imputing missing values
-Note that there are a number of days/intervals where there are missing values (coded as \color{red}{\verb|NA|}NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
-Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with \color{red}{\verb|NA|}NAs)
-Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+* Total number of rows with "NA" values:
 
-Create a new dataset that is equal to the original dataset but with the missing data filled in.
-Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```r{find_NAs, echo = TRUE}
+sum(is.na(amd$steps))
+```
+* Strategy for filling in missing data:
+
+Where there are missing values, substitute the "NA" value with the mean number of steps (with NAs removed) for that interval (across all days)
+
+* Create a new dataset that is equal to the original dataset but with the missing data filled in:
+
+```r{fill_in_NAs, echo = TRUE}
+amd_arranged <- arrange(amd, interval, date)
+amd_arranged <- na.exclude(group_by(amd_arranged,interval))
+amd_arranged <- summarize(amd_arranged, meansteps = mean(steps))
+amd_joined <- full_join(amd, amd_arranged)
+amd_joined$steps <- as.double(amd_joined$steps)
+amd_joined <- mutate(amd_joined, navalue = is.na(steps))
+amd_joined <- mutate(amd_joined, mod.steps = if_else(navalue == "TRUE",meansteps,steps))
+amd_new <- select (amd_joined, c(mod.steps, date, interval))
+names(amd_new) <- c("steps", "date", "interval")
+```
+  + Verify that "amd" and "amd_new" are identical, but with the NAs removed:
+```r{verify, echo = TRUE}
+summary(amd)
+summary(amd_new)
+```
+* Make a histogram of the total number of steps taken each day and calculate and report the mean and median total number of steps taken per day. So, this is nearly identical, obviously, to the earlier exercise:
+
+```{r sum_steps_new, echo = TRUE}
+amd_grouped_new <- group_by(amd_new, date)
+amd_grouped_new <- summarize(amd_grouped_new, Total.Steps = sum(steps))
+```
+* Make a histogram of the total number of steps taken each day
+```{r histogram_generator_new, echo = TRUE}
+hist(amd_grouped_new$Total.Steps, main = "Histogram of Total Steps With Missing Values Filled", xlab = "Total Number of Steps Taken", ylab = "Total Number of Days in Range", col = "green")
+```
+* Mean number of steps per day:
+```{r mean_steps_new, echo = TRUE}
+mean_new <- mean(amd_grouped_new$Total.Steps)
+print(mean_new) 
+```
+* Median number of steps per day:
+```{r median_steps_new, echo = TRUE}
+median_new <- median(amd_grouped_new$Total.Steps)
+print(median_new) 
+```
+
+## Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r compare}
+print("Mean from dataset with NAs removed:")
+print(mean)
+print("Mean from new data:")
+print(mean_new)
+print("Means are identical, likely because the NA fill strategy was to use means of the data per interval that wasn't missing")
+print("--------------------------------------------------------")
+print("Median from dataset with NAs removed:")
+print(median)
+print("Median from new data:")
+print(median_new)
+print("The median and the mean of the new data set are identical, but the median ticked a bit higher with the new data set, as the addition of more values shifted the middle value to the right a bit")
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
-Are there differences in activity patterns between weekdays and weekends?
-For this part the \color{red}{\verb|weekdays()|}weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+* For this part, the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
 
 Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
 
-Make a panel plot containing a time series plot (i.e. \color{red}{\verb|type = "l"|}type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+```{r create_daytype_factor, echo = TRUE}
+amd_new$daytype <- as.factor(is.weekend(amd_new$date))
+levels(amd_new$daytype) <- c("weekday","weekend")
+str(amd_new)
+```
+Make a panel plot containing a time series plot (i.e. type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+```{r make_panel_plots}
+weekday <- filter(amd_new, daytype == "weekday")
+weekend <- filter(amd_new, daytype == "weekend")
+
+weekday_time_group <- na.exclude(group_by(weekday, interval))
+weekday_time_group <- summarize(weekday_time_group, Average.Steps = mean(steps))
+weekday_plot <- ggplot(weekday_time_group, aes(interval,Average.Steps))+geom_line(col="blue")+labs(title = "Average Daily Activity Summary", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
+
+weekend_time_group <- na.exclude(group_by(weekend, interval))
+weekend_time_group <- summarize(weekend_time_group, Average.Steps = mean(steps))
+weekend_plot <- ggplot(weekend_time_group, aes(interval,Average.Steps))+geom_line(col="orange")+labs(title = "Average Daily Activity Summary", x = "5 Minute Intervals, Averaged Over All Days", y = "Average Number of Steps")
+
+ggarrange(weekday_plot, weekend_plot, 
+          labels = c("Weekdays", "Weekends"),
+          ncol = 2, nrow = 1)
